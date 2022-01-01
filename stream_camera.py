@@ -58,6 +58,7 @@ def centre_image_logging_worker(camera_params):
         params = camera_params["centre"]
         stream_id = params["stream_id"]
         vis = params["vis"]
+        log = params["log"]
 
         cap = cv2.VideoCapture(stream_id)
         if not cap.isOpened():
@@ -85,7 +86,8 @@ def centre_image_logging_worker(camera_params):
                 print("Centre worker: dropped frame")
                 continue
             dst = cv2.remap(frame, map1, map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-            cv2.imwrite(write_dir + str(ts) + '.jpg', dst)
+            if log:
+                cv2.imwrite(write_dir + str(ts) + '.jpg', dst)
             if vis:
                 cv2.imshow("Centre", dst)
                 key = cv2.waitKey(1)
@@ -105,6 +107,7 @@ def side_image_logging_worker(camera_params, databuf):
         right_params = camera_params["right"]
         stream_id = left_params["stream_id"]
         vis = left_params["vis"]
+        log = left_params["log"]
 
         cap = cv2.VideoCapture(stream_id)
         if not cap.isOpened():
@@ -150,8 +153,9 @@ def side_image_logging_worker(camera_params, databuf):
             # cv2.imwrite(left_write_dir + str(ts) + '.jpg', left_dst)
             # cv2.imwrite(right_write_dir + str(ts) + '.jpg', right_dst)
 
-            databuf.put((True, ts, left_dst))
-            databuf.put((False, ts, right_dst))
+            if log:
+                databuf.put((True, ts, left_dst))
+                databuf.put((False, ts, right_dst))
 
             if vis:
                 cv2.imshow("Left", left_dst)
@@ -193,6 +197,7 @@ def centre_video_logging_worker(camera_params):
         params = camera_params["centre"]
         stream_id = params["stream_id"]
         vis = params["vis"]
+        log = params["log"]
 
         cap = cv2.VideoCapture(stream_id)
         if not cap.isOpened():
@@ -210,12 +215,13 @@ def centre_video_logging_worker(camera_params):
         map1, map2 = cv2.fisheye.initUndistortRectifyMap(mtx, dist, np.eye(3), mtx, (cw, ch), cv2.CV_16SC2)
         out_file = "centre/centre.mp4"
 
-        print("Initialising FFMPEG writing process...")
-        write_process = sp.Popen(shlex.split(
-            f'ffmpeg -y -s {cw}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {out_file}'), 
-            stdin=sp.PIPE,
-            stderr=sp.DEVNULL,
-            stdout=sp.DEVNULL)
+        if log:
+            print("Initialising FFMPEG writing process...")
+            write_process = sp.Popen(shlex.split(
+                f'ffmpeg -y -s {cw}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {out_file}'), 
+                stdin=sp.PIPE,
+                stderr=sp.DEVNULL,
+                stdout=sp.DEVNULL)
 
         print("Reading and logging centre camera data...")
         ts_buffer = collections.deque(maxlen=60)
@@ -228,7 +234,8 @@ def centre_video_logging_worker(camera_params):
                 continue
             # count += 1
             dst = cv2.remap(frame, map1, map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-            write_process.stdin.write(dst.tobytes())
+            if log:
+                write_process.stdin.write(dst.tobytes())
             if vis:
                 cv2.imshow("Centre", dst)
                 key = cv2.waitKey(1)
@@ -256,6 +263,7 @@ def side_video_logging_worker(camera_params):
         right_params = camera_params["right"]
         stream_id = left_params["stream_id"]
         vis = left_params["vis"]
+        log = left_params["log"]
 
         cap = cv2.VideoCapture(stream_id)
         if not cap.isOpened():
@@ -284,17 +292,18 @@ def side_video_logging_worker(camera_params):
         right_out_file = "right/right.mp4"
 
         print("Initialising FFMPEG writing process...")
-        left_write_process = sp.Popen(shlex.split(
-            f'ffmpeg -y -s {left_w}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {left_out_file}'), 
-            stdin=sp.PIPE,
-            stderr=sp.DEVNULL,
-            stdout=sp.DEVNULL)
+        if log:
+            left_write_process = sp.Popen(shlex.split(
+                f'ffmpeg -y -s {left_w}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {left_out_file}'), 
+                stdin=sp.PIPE,
+                stderr=sp.DEVNULL,
+                stdout=sp.DEVNULL)
 
-        right_write_process = sp.Popen(shlex.split(
-            f'ffmpeg -y -s {right_w}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {right_out_file}'), 
-            stdin=sp.PIPE,
-            stderr=sp.DEVNULL,
-            stdout=sp.DEVNULL)
+            right_write_process = sp.Popen(shlex.split(
+                f'ffmpeg -y -s {right_w}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {right_out_file}'), 
+                stdin=sp.PIPE,
+                stderr=sp.DEVNULL,
+                stdout=sp.DEVNULL)
 
         print("Reading and logging side camera data...")
         ts_buffer = collections.deque(maxlen=60)
@@ -309,8 +318,9 @@ def side_video_logging_worker(camera_params):
             right_frame = frame[:, right_crop_pos::-1, :]
             left_dst = cv2.remap(left_frame, lmap1, lmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
             right_dst = cv2.remap(right_frame, rmap1, rmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-            left_write_process.stdin.write(left_dst.tobytes())
-            right_write_process.stdin.write(right_dst.tobytes())
+            if log:
+                left_write_process.stdin.write(left_dst.tobytes())
+                right_write_process.stdin.write(right_dst.tobytes())
             if vis:
                 cv2.imshow("Left", left_dst)
                 cv2.imshow("Right", right_dst)
@@ -358,11 +368,15 @@ if __name__ == "__main__":
         default=30)
     parser.add_argument("--log_dir", type=str, help="specify directory to log to",
         default=None)
+    parser.add_argument("--log_data", type=bool, help="logs data to log_dir if true",
+        default=True)
+    parser.add_argument("--jpg_writer_pool_size", type=int, help="size of thread pool for writing data to file (only used for jpg writing)",
+        default=3)
 
     args = parser.parse_args()
-    camera_params = {"left":{"calib_path":args.left_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, "vis":args.visualise}, 
-                     "right":{"calib_path":args.right_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, "vis": args.visualise}, 
-                     "centre":{"calib_path":args.centre_calib, "stream_id":args.centre_id, "vis":args.visualise}}
+    camera_params = {"left":{"calib_path":args.left_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, "vis":args.visualise, "log":args.log_data}, 
+                     "right":{"calib_path":args.right_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, "vis": args.visualise, "log":args.log_data}, 
+                     "centre":{"calib_path":args.centre_calib, "stream_id":args.centre_id, "vis":args.visualise, "log":args.log_data}}
 
     # Default directory for logging uses present date and time
     if args.log_dir is None:
@@ -409,16 +423,18 @@ if __name__ == "__main__":
                 process.start()
 
             # Start the consumer pool that writes the side images to file
-            pool_size = 3
-            consumer_pool = [multiprocessing.Process(target=side_image_logging_writer, args=(buffer,)) for _ in range(pool_size)]
-            for process in consumer_pool:
-                process.start()
+            if args.log_data:
+                pool_size = args.jpg_writer_pool_size
+                consumer_pool = [multiprocessing.Process(target=side_image_logging_writer, args=(buffer,)) for _ in range(pool_size)]
+                for process in consumer_pool:
+                    process.start()
             
             for process in processes:
                 process.join()
 
-            for process in consumer_pool:
-                process.join()
+            if args.log_data:
+                for process in consumer_pool:
+                    process.join()
     except KeyboardInterrupt:
         print("Received interrupt...")
 
