@@ -60,6 +60,7 @@ def centre_image_logging_worker(camera_params):
         vis = params["vis"]
         log = params["log"]
 
+        stream_id = stream_id + cv2.CAP_V4L2 if params["v4l2"] else stream_id
         cap = cv2.VideoCapture(stream_id)
         if not cap.isOpened():
             print("Centre worker: error opening camera")
@@ -109,6 +110,7 @@ def side_image_logging_worker(camera_params, databuf):
         vis = left_params["vis"]
         log = left_params["log"]
 
+        stream_id = stream_id + cv2.CAP_V4L2 if params["v4l2"] else stream_id
         cap = cv2.VideoCapture(stream_id)
         if not cap.isOpened():
             print("Side worker: error opening camera")
@@ -199,6 +201,7 @@ def centre_video_logging_worker(camera_params):
         vis = params["vis"]
         log = params["log"]
 
+        stream_id = stream_id + cv2.CAP_V4L2 if params["v4l2"] else stream_id
         cap = cv2.VideoCapture(stream_id)
         if not cap.isOpened():
             print("Centre worker: error opening camera")
@@ -217,8 +220,11 @@ def centre_video_logging_worker(camera_params):
 
         if log:
             print("Initialising FFMPEG writing process...")
+            ffmpeg_exe = "ffmpeg"
+            if params["arm64_exe_path"] is not None:
+                ffmpeg_exe = "./" + params["arm64_exe_path"] + "/ffmpeg"
             write_process = sp.Popen(shlex.split(
-                f'ffmpeg -y -s {cw}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {out_file}'), 
+                f'{ffmpeg_exe} -y -s {cw}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {out_file}'), 
                 stdin=sp.PIPE,
                 stderr=sp.DEVNULL,
                 stdout=sp.DEVNULL)
@@ -265,6 +271,7 @@ def side_video_logging_worker(camera_params):
         vis = left_params["vis"]
         log = left_params["log"]
 
+        stream_id = stream_id + cv2.CAP_V4L2 if params["v4l2"] else stream_id
         cap = cv2.VideoCapture(stream_id)
         if not cap.isOpened():
             print("Side worker: error opening camera")
@@ -293,14 +300,17 @@ def side_video_logging_worker(camera_params):
 
         print("Initialising FFMPEG writing process...")
         if log:
+            ffmpeg_exe = "ffmpeg"
+            if params["arm64_exe_path"] is not None:
+                ffmpeg_exe = "./" + params["arm64_exe_path"] + "/ffmpeg"
             left_write_process = sp.Popen(shlex.split(
-                f'ffmpeg -y -s {left_w}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {left_out_file}'), 
+                f'{ffmpeg_exe} -y -s {left_w}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {left_out_file}'), 
                 stdin=sp.PIPE,
                 stderr=sp.DEVNULL,
                 stdout=sp.DEVNULL)
 
             right_write_process = sp.Popen(shlex.split(
-                f'ffmpeg -y -s {right_w}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {right_out_file}'), 
+                f'{ffmpeg_exe} -y -s {right_w}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {right_out_file}'), 
                 stdin=sp.PIPE,
                 stderr=sp.DEVNULL,
                 stdout=sp.DEVNULL)
@@ -372,11 +382,25 @@ if __name__ == "__main__":
         default=True)
     parser.add_argument("--jpg_writer_pool_size", type=int, help="size of thread pool for writing data to file (only used for jpg writing)",
         default=3)
+    parser.add_argument("--force_v4l2", type=bool, help="forces OpenCV to use v4l2 drivers if true (suitable for Linux), otherwise allows OpenCV to decide",
+        default=False)
+    parser.add_argument("--target_arm64", type=bool, help="uses binaries targeted at arm64 if true: e.g. uses prepackaged arm64 ffmpeg, ffprobe binaries etc.",
+        default=False)
 
     args = parser.parse_args()
-    camera_params = {"left":{"calib_path":args.left_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, "vis":args.visualise, "log":args.log_data}, 
-                     "right":{"calib_path":args.right_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, "vis": args.visualise, "log":args.log_data}, 
-                     "centre":{"calib_path":args.centre_calib, "stream_id":args.centre_id, "vis":args.visualise, "log":args.log_data}}
+
+    # Get directory the script is in, so that we can access the packaged ffmpeg and ffprobe utilities
+    arm64_exe_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ffmpeg-4.4.1-arm64-static") if args.target_arm64 else None
+    camera_params = {"left":{"calib_path":args.left_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, 
+                             "vis":args.visualise, "log":args.log_data, "v4l2":args.force_v4l2, "arm64_exe_path":arm64_exe_path}, 
+                     "right":{"calib_path":args.right_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, 
+                              "vis": args.visualise, "log":args.log_data, "v4l2":args.force_v4l2, "arm64_exe_path":arm64_exe_path}, 
+                     "centre":{"calib_path":args.centre_calib, "stream_id":args.centre_id, "vis":args.visualise, "log":args.log_data, 
+                               "v4l2":args.force_v4l2, "arm64_exe_path":arm64_exe_path}}
+
+    if arm64_exe_path is not None and not os.path.exists(arm64_exe_path):
+        print("Unpacking packaged ffmpeg")
+        sp.run(["tar", "-zxvf", "ffmpeg-release-arm64-static.tar.xz"])
 
     # Default directory for logging uses present date and time
     if args.log_dir is None:
@@ -403,7 +427,7 @@ if __name__ == "__main__":
             # Logging as HEVC-encoded MP4 video
             centre_process = multiprocessing.Process(target=centre_video_logging_worker, args=(camera_params,))
             side_process = multiprocessing.Process(target=side_video_logging_worker, args=(camera_params,))
-            processes = [centre_process, side_process]
+            processes = [centre_process]
             for process in processes:
                 process.start()
             

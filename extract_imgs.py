@@ -11,6 +11,16 @@ if __name__ == "__main__":
         default=None)
     args = parser.parse_args()
 
+    arm64_exe_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ffmpeg-4.4.1-arm64-static") if args.target_arm64 else None
+    if arm64_exe_path is not None and not os.path.exists(arm64_exe_path):
+        print("Unpacking packaged ffmpeg")
+        sp.run(["tar", "-zxvf", "ffmpeg-release-arm64-static.tar.xz"])
+    ffmpeg_path = "ffmpeg"
+    ffprobe_path = "ffprobe"
+    if arm64_exe_path is not None:
+        ffmpeg_path = "./" + arm64_exe_path + "/ffmpeg"
+        ffprobe_path = "./" + arm64_exe_path + "/ffprobe"
+
     if args.log_dir is None:
         print("No log directory specified!")
         exit(0)
@@ -23,11 +33,11 @@ if __name__ == "__main__":
         os.chdir(dir)
         print("Converting mp4 to jpg")
         vid_file = dir + ".mp4"
-        convert_process = sp.Popen(shlex.split(f'ffmpeg -i {vid_file} -f image2 -frame_pts true %06d.jpg'))
+        convert_process = sp.Popen(shlex.split(f'{ffmpeg_path} -i {vid_file} -f image2 -frame_pts true %06d.jpg'))
         ret = convert_process.wait()
 
         print("Checking mp4 presentation timestamps")
-        ts_json_out = sp.Popen(shlex.split(f'ffprobe {vid_file} -v quiet -select_streams v -of json -show_entries frame=best_effort_timestamp_time'),
+        ts_json_out = sp.Popen(shlex.split(f'{ffprobe_path} {vid_file} -v quiet -select_streams v -of json -show_entries frame=best_effort_timestamp_time'),
             stdout=sp.PIPE)
         ts_json = json.loads(ts_json_out.stdout.read())
 
