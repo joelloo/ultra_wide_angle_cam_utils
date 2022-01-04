@@ -150,10 +150,6 @@ def side_image_logging_worker(camera_params, databuf):
             right_frame = frame[:, right_crop_pos:, :]
             left_dst = cv2.remap(left_frame, lmap1, lmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
             right_dst = cv2.remap(right_frame, rmap1, rmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-            # left_dst = left_dst[:, ::-1, :]
-            # right_dst = right_dst[:, ::-1, :]
-            # cv2.imwrite(left_write_dir + str(ts) + '.jpg', left_dst)
-            # cv2.imwrite(right_write_dir + str(ts) + '.jpg', right_dst)
 
             if log:
                 databuf.put((True, ts, left_dst))
@@ -182,7 +178,6 @@ def side_image_logging_writer(databuf):
         while True:
             ret = databuf.get()
             if ret:
-                # print("Received, writing")
                 is_left, ts, im = ret
                 write_dir = left_write_dir if is_left else right_write_dir
                 im = im[:, ::-1, :]
@@ -222,7 +217,7 @@ def centre_video_logging_worker(camera_params):
             print("Initialising FFMPEG writing process...")
             ffmpeg_exe = "ffmpeg"
             if params["arm64_exe_path"] is not None:
-                ffmpeg_exe = "./" + params["arm64_exe_path"] + "/ffmpeg"
+                ffmpeg_exe = params["arm64_exe_path"] + "/ffmpeg"
             write_process = sp.Popen(shlex.split(
                 f'{ffmpeg_exe} -y -s {cw}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {out_file}'), 
                 stdin=sp.PIPE,
@@ -302,7 +297,7 @@ def side_video_logging_worker(camera_params):
         if log:
             ffmpeg_exe = "ffmpeg"
             if params["arm64_exe_path"] is not None:
-                ffmpeg_exe = "./" + params["arm64_exe_path"] + "/ffmpeg"
+                ffmpeg_exe = params["arm64_exe_path"] + "/ffmpeg"
             left_write_process = sp.Popen(shlex.split(
                 f'{ffmpeg_exe} -y -s {left_w}x{ch} -pixel_format bgr24 -f rawvideo -framerate 30 -i pipe: -filter:v "settb=1/1000,setpts=RTCTIME/1000-1600000000000" -vcodec libx265 -pix_fmt yuv420p -crf 24 {left_out_file}'), 
                 stdin=sp.PIPE,
@@ -400,7 +395,7 @@ if __name__ == "__main__":
 
     if arm64_exe_path is not None and not os.path.exists(arm64_exe_path):
         print("Unpacking packaged ffmpeg")
-        sp.run(["tar", "-zxvf", "ffmpeg-release-arm64-static.tar.xz"])
+        sp.run(["tar", "-xvf", "ffmpeg-release-arm64-static.tar.xz"])
 
     # Default directory for logging uses present date and time
     if args.log_dir is None:
@@ -419,7 +414,7 @@ if __name__ == "__main__":
         calib = np.load(params["calib_path"])
         params['camera_matrix'] = calib['camera_matrix']
         params['distortion'] = calib['distortion']
-        camera_params[cam] = params
+        camera_params[cam] = params 
 
     print("Streaming and logging...")
     try:

@@ -9,17 +9,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--log_dir", type=str, help="specify log directory",
         default=None)
+    parser.add_argument("--target_arm64", type=bool, help="uses binaries targeted at arm64 if true: e.g. uses prepackaged arm64 ffmpeg, ffprobe binaries etc.",
+        default=False)
     args = parser.parse_args()
 
     arm64_exe_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ffmpeg-4.4.1-arm64-static") if args.target_arm64 else None
     if arm64_exe_path is not None and not os.path.exists(arm64_exe_path):
         print("Unpacking packaged ffmpeg")
-        sp.run(["tar", "-zxvf", "ffmpeg-release-arm64-static.tar.xz"])
+        sp.run(["tar", "-xvf", "ffmpeg-release-arm64-static.tar.xz"])
     ffmpeg_path = "ffmpeg"
     ffprobe_path = "ffprobe"
     if arm64_exe_path is not None:
-        ffmpeg_path = "./" + arm64_exe_path + "/ffmpeg"
-        ffprobe_path = "./" + arm64_exe_path + "/ffprobe"
+        ffmpeg_path = arm64_exe_path + "/ffmpeg"
+        ffprobe_path = arm64_exe_path + "/ffprobe"
 
     if args.log_dir is None:
         print("No log directory specified!")
