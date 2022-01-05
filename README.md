@@ -9,4 +9,4 @@ This repository comprises a few scripts to allow processing of data from the ult
 ## Installation
 The tools are written entirely in Python, and have been tested in a conda environment using Python 3.8. The conda environment used for testing is specified in the provided environment.yml. It is recommended that the user create a conda environment directly from this environment.yml and run the scripts inside the environment.
 
-If logging to video is needed, the repository contains packaged ffmpeg and ffprobe binaries that will be unpacked and called instead of the user's system ffmpeg and ffprobe.
+If logging to video is needed, the repository contains packaged ffmpeg and ffprobe binaries that will be unpacked and called instead of the user's system ffmpeg and ffprobe. The compiled binaries are obtained from the following: https://superuser.com/questions/1302753/ffmpeg-unrecognized-option-crf-error-splitting-the-argument-list-option-not

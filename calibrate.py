@@ -30,7 +30,7 @@ while True:
         time.sleep(0.025)
         continue
     
-    frame = frame[:, 1010:, :]
+    frame = frame[:, :910, :]
     cv.imshow("Camera view", frame)
     key = cv.waitKey(50)
     if key == ord('s'):
@@ -53,44 +53,44 @@ while True:
     elif key == ord('q'):
         break
 
-# ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
-# if ret:
-#     print("=== Camera matrix ===")
-#     print(mtx)
-#     print("=== Distortion ===")
-#     print(dist)
-#     print("=== Rotation ===")
-#     print(rvecs)
-#     print("=== Translation ===")
-#     print(tvecs)
-
-#     savevals = {"camera_matrix":mtx, "distortion":dist, "R":rvecs, "t":tvecs}
-
-#     print('Saved to calibration_params.npz')
-#     np.savez("calibration_params.npz", **savevals)
-
-objpoints = np.expand_dims(np.array(objpoints, dtype=np.float32), -2)
-imgpoints = np.array(imgpoints, dtype=np.float32)
-
-K = np.zeros((3, 3))
-D = np.zeros((4, 1))
-rvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(len(objpoints))]
-tvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(len(objpoints))]
-calibration_flags = cv.fisheye.CALIB_RECOMPUTE_EXTRINSIC + cv.fisheye.CALIB_CHECK_COND + cv.fisheye.CALIB_FIX_SKEW
-shape = frame.shape[:-1]
-ret, _, _, _, _ = cv.fisheye.calibrate(
-    objpoints, imgpoints, shape[::-1], K, D, rvecs, tvecs, calibration_flags, criteria)
+ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
 if ret:
-    print("=== K ===")
-    print(K)
-    print("=== D ===")
-    print(D)
+    print("=== Camera matrix ===")
+    print(mtx)
+    print("=== Distortion ===")
+    print(dist)
     print("=== Rotation ===")
     print(rvecs)
     print("=== Translation ===")
     print(tvecs)
 
-    savevals = {"camera_matrix":K, "distortion":D, "R":rvecs, "t":tvecs}
+    savevals = {"camera_matrix":mtx, "distortion":dist, "R":rvecs, "t":tvecs}
 
-    print("Saved to calibration_params.npz")
+    print('Saved to calibration_params.npz')
     np.savez("calibration_params.npz", **savevals)
+
+# objpoints = np.expand_dims(np.array(objpoints, dtype=np.float32), -2)
+# imgpoints = np.array(imgpoints, dtype=np.float32)
+
+# K = np.zeros((3, 3))
+# D = np.zeros((4, 1))
+# rvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(len(objpoints))]
+# tvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(len(objpoints))]
+# calibration_flags = cv.fisheye.CALIB_RECOMPUTE_EXTRINSIC + cv.fisheye.CALIB_CHECK_COND + cv.fisheye.CALIB_FIX_SKEW
+# shape = frame.shape[:-1]
+# ret, _, _, _, _ = cv.fisheye.calibrate(
+#     objpoints, imgpoints, shape[::-1], K, D, rvecs, tvecs, calibration_flags, criteria)
+# if ret:
+#     print("=== K ===")
+#     print(K)
+#     print("=== D ===")
+#     print(D)
+#     print("=== Rotation ===")
+#     print(rvecs)
+#     print("=== Translation ===")
+#     print(tvecs)
+
+#     savevals = {"camera_matrix":K, "distortion":D, "R":rvecs, "t":tvecs}
+
+#     print("Saved to calibration_params.npz")
+#     np.savez("calibration_params.npz", **savevals)
