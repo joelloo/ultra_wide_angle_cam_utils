@@ -192,7 +192,7 @@ def side_image_logging_worker(camera_params, databuf):
         print("Side worker: cleaning up and exiting")
 
 
-def side_image_logging_writer(databuf):
+def image_logging_writer(databuf):
     try:
         print("Spawned writer process")
 
@@ -200,9 +200,9 @@ def side_image_logging_writer(databuf):
             ret = databuf.get()
             if ret:
                 write_dir, ts, im = ret
-                write_dir += "/"
-                im = im[:, ::-1, :]
-                cv2.imwrite(write_dir + str(ts) + '.jpg', im)
+                if not write_dir == "centre":
+                    im = im[:, ::-1, :]
+                cv2.imwrite(write_dir + '/' + str(ts) + '.jpg', im)
     except KeyboardInterrupt:
         print("Writer process cleaning up and exiting")
 
@@ -445,9 +445,9 @@ if __name__ == "__main__":
     # Create separate folders for each camera
     os.chdir(args.log_dir)
     for cam in camera_params.keys():
-        if args.distort_type == 0:
+        if args.log_distorted == 0:
             os.mkdir(cam + "_distorted")
-        elif args.distort_type == 1:
+        elif args.log_distorted == 1:
             os.mkdir(cam)
         else:
             os.mkdir(cam + "_distorted")
@@ -488,7 +488,7 @@ if __name__ == "__main__":
             # Start the consumer pool that writes the side images to file
             if args.log_data:
                 pool_size = args.jpg_writer_pool_size
-                consumer_pool = [multiprocessing.Process(target=side_image_logging_writer, args=(buffer,)) for _ in range(pool_size)]
+                consumer_pool = [multiprocessing.Process(target=image_logging_writer, args=(buffer,)) for _ in range(pool_size)]
                 for process in consumer_pool:
                     process.start()
             
