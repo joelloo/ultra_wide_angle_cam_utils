@@ -19,7 +19,6 @@ class ConcurrentRingBuffer:
     def put(self, item):
         self.lock.acquire()
         self.deque.append(item)
-        # print("~",len(self.deque))
         self.lock.release()
 
     def put_nowait(self, item):
@@ -31,7 +30,6 @@ class ConcurrentRingBuffer:
 
     def get(self):
         self.lock.acquire()
-        # print("=",len(self.deque))
         if len(self.deque) == 0:
             self.lock.release()
             return None
@@ -52,13 +50,14 @@ class ConcurrentRingBuffer:
                 return True, item
         return False, None
 
-def centre_image_logging_worker(camera_params):
+def centre_image_logging_worker(camera_params, databuf):
     try:
         print("Centre worker: initialising")
         params = camera_params["centre"]
         stream_id = params["stream_id"]
         vis = params["vis"]
         log = params["log"]
+        distort_type = params["log_distorted"]
 
         stream_id = stream_id + cv2.CAP_V4L2 if params["v4l2"] else stream_id
         cap = cv2.VideoCapture(stream_id)
@@ -75,7 +74,6 @@ def centre_image_logging_worker(camera_params):
         mtx = params["camera_matrix"]
         dist = params["distortion"]
         map1, map2 = cv2.fisheye.initUndistortRectifyMap(mtx, dist, np.eye(3), mtx, (cw, ch), cv2.CV_16SC2)
-        write_dir = "centre/"
         ts_buffer = collections.deque(maxlen=60)
         last_printed = time.time()
 
@@ -86,9 +84,20 @@ def centre_image_logging_worker(camera_params):
             if not ret:
                 print("Centre worker: dropped frame")
                 continue
-            dst = cv2.remap(frame, map1, map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+
+            if distort_type == 0:
+                dst = frame
+            else:
+                dst = cv2.remap(frame, map1, map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+            
             if log:
-                cv2.imwrite(write_dir + str(ts) + '.jpg', dst)
+                if distort_type == 0:
+                    databuf.put(("centre_distorted", ts, dst))
+                elif distort_type == 1:
+                    databuf.put((databuf.put(("centre", ts, dst))))
+                elif distort_type == 2:
+                    databuf.put(("centre_distorted", ts, frame))
+                    databuf.put(("centre", ts, dst))
             if vis:
                 cv2.imshow("Centre", dst)
                 key = cv2.waitKey(1)
@@ -109,6 +118,7 @@ def side_image_logging_worker(camera_params, databuf):
         stream_id = left_params["stream_id"]
         vis = left_params["vis"]
         log = left_params["log"]
+        distort_type = left_params["log_distorted"]
 
         stream_id = stream_id + cv2.CAP_V4L2 if params["v4l2"] else stream_id
         cap = cv2.VideoCapture(stream_id)
@@ -148,12 +158,26 @@ def side_image_logging_worker(camera_params, databuf):
                 continue
             left_frame = frame[:, :left_crop_pos, :]
             right_frame = frame[:, right_crop_pos:, :]
-            left_dst = cv2.remap(left_frame, lmap1, lmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-            right_dst = cv2.remap(right_frame, rmap1, rmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+
+            if distort_type == 0:
+                left_dst = left_frame
+                right_dst = right_frame
+            else:
+                left_dst = cv2.remap(left_frame, lmap1, lmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+                right_dst = cv2.remap(right_frame, rmap1, rmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
 
             if log:
-                databuf.put((True, ts, left_dst))
-                databuf.put((False, ts, right_dst))
+                if distort_type == 0:
+                    databuf.put(("left_distorted", ts, left_dst))
+                    databuf.put(("right_distorted", ts, right_dst))
+                elif distort_type == 1:
+                    databuf.put(("left", ts, left_dst))
+                    databuf.put(("right", ts, right_dst))
+                if distort_type == 2:
+                    databuf.put(("left_distorted", ts, left_frame))
+                    databuf.put(("right_distorted", ts, right_frame))
+                    databuf.put(("left", ts, left_dst))
+                    databuf.put(("right", ts, right_dst))
 
             if vis:
                 cv2.imshow("Left", left_dst)
@@ -171,15 +195,12 @@ def side_image_logging_worker(camera_params, databuf):
 def side_image_logging_writer(databuf):
     try:
         print("Spawned writer process")
-        print(os.getcwd())
-        left_write_dir = "left/"
-        right_write_dir = "right/"
 
         while True:
             ret = databuf.get()
             if ret:
-                is_left, ts, im = ret
-                write_dir = left_write_dir if is_left else right_write_dir
+                write_dir, ts, im = ret
+                write_dir += "/"
                 im = im[:, ::-1, :]
                 cv2.imwrite(write_dir + str(ts) + '.jpg', im)
     except KeyboardInterrupt:
@@ -195,6 +216,7 @@ def centre_video_logging_worker(camera_params):
         stream_id = params["stream_id"]
         vis = params["vis"]
         log = params["log"]
+        distort_type = params["log_distorted"]
 
         stream_id = stream_id + cv2.CAP_V4L2 if params["v4l2"] else stream_id
         cap = cv2.VideoCapture(stream_id)
@@ -211,7 +233,7 @@ def centre_video_logging_worker(camera_params):
         mtx = params["camera_matrix"]
         dist = params["distortion"]
         map1, map2 = cv2.fisheye.initUndistortRectifyMap(mtx, dist, np.eye(3), mtx, (cw, ch), cv2.CV_16SC2)
-        out_file = "centre/centre.mp4"
+        out_file = "centre_distorted/centre.mp4" if distort_type == 0 else "centre/centre.mp4"
 
         if log:
             print("Initialising FFMPEG writing process...")
@@ -234,7 +256,12 @@ def centre_video_logging_worker(camera_params):
                 print("Centre worker: dropped frame")
                 continue
             # count += 1
-            dst = cv2.remap(frame, map1, map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+
+            if distort_type == 0:
+                dst = frame
+            else:
+                dst = cv2.remap(frame, map1, map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+
             if log:
                 write_process.stdin.write(dst.tobytes())
             if vis:
@@ -265,6 +292,7 @@ def side_video_logging_worker(camera_params):
         stream_id = left_params["stream_id"]
         vis = left_params["vis"]
         log = left_params["log"]
+        distort_type = left_params["log_distorted"]
 
         stream_id = stream_id + cv2.CAP_V4L2 if params["v4l2"] else stream_id
         cap = cv2.VideoCapture(stream_id)
@@ -290,8 +318,8 @@ def side_video_logging_worker(camera_params):
         right_w = cw - right_crop_pos
         rmap1, rmap2 = cv2.fisheye.initUndistortRectifyMap(right_mtx, right_dist, np.eye(3), right_mtx, (right_w, ch), cv2.CV_16SC2)
 
-        left_out_file = "left/left.mp4"
-        right_out_file = "right/right.mp4"
+        left_out_file = "left_distorted/left.mp4" if distort_type == 0  else "left/left.mp4"
+        right_out_file = "right_distorted/right.mp4" if distort_type == 0 else "right/right.mp4"
 
         print("Initialising FFMPEG writing process...")
         if log:
@@ -319,10 +347,16 @@ def side_video_logging_worker(camera_params):
             if not ret:
                 print("Side worker: dropped frame")
                 continue
-            left_frame = frame[:, :left_crop_pos:-1, :]
-            right_frame = frame[:, right_crop_pos::-1, :]
-            left_dst = cv2.remap(left_frame, lmap1, lmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-            right_dst = cv2.remap(right_frame, rmap1, rmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+            left_frame = frame[:, :left_crop_pos, :]
+            right_frame = frame[:, right_crop_pos:, :]
+
+            if distort_type == 0:
+                left_dst = left_frame[:, ::-1, :]
+                right_dst = right_frame[:, ::-1, :]
+            else:
+                left_dst = cv2.remap(left_frame[:, ::-1, :], lmap1, lmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+                right_dst = cv2.remap(right_frame[:, ::-1, :], rmap1, rmap2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+
             if log:
                 left_write_process.stdin.write(left_dst.tobytes())
                 right_write_process.stdin.write(right_dst.tobytes())
@@ -381,17 +415,21 @@ if __name__ == "__main__":
         default=False)
     parser.add_argument("--target_arm64", type=bool, help="uses binaries targeted at arm64 if true: e.g. uses prepackaged arm64 ffmpeg, ffprobe binaries etc.",
         default=False)
+    parser.add_argument("--log_distorted", type=int, help="0: logs only distorted images, 1: logs only undistorted images, 2 (APPLICABLE ONLY TO JPG LOGGING!): logs both distorted and undistorted images",
+        default=1)
 
     args = parser.parse_args()
 
     # Get directory the script is in, so that we can access the packaged ffmpeg and ffprobe utilities
     arm64_exe_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ffmpeg-4.4.1-arm64-static") if args.target_arm64 else None
     camera_params = {"left":{"calib_path":args.left_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, 
-                             "vis":args.visualise, "log":args.log_data, "v4l2":args.force_v4l2, "arm64_exe_path":arm64_exe_path}, 
+                             "vis":args.visualise, "log":args.log_data, "v4l2":args.force_v4l2, "arm64_exe_path":arm64_exe_path,
+                             "log_distorted":args.log_distorted}, 
                      "right":{"calib_path":args.right_calib, "stream_id":args.side_id, "crop_offset":args.side_camera_crop_offset, 
-                              "vis": args.visualise, "log":args.log_data, "v4l2":args.force_v4l2, "arm64_exe_path":arm64_exe_path}, 
+                              "vis": args.visualise, "log":args.log_data, "v4l2":args.force_v4l2, "arm64_exe_path":arm64_exe_path,
+                              "log_distorted":args.log_distorted}, 
                      "centre":{"calib_path":args.centre_calib, "stream_id":args.centre_id, "vis":args.visualise, "log":args.log_data, 
-                               "v4l2":args.force_v4l2, "arm64_exe_path":arm64_exe_path}}
+                               "v4l2":args.force_v4l2, "arm64_exe_path":arm64_exe_path, "log_distorted":args.log_distorted}}
 
     if arm64_exe_path is not None and not os.path.exists(arm64_exe_path):
         print("Unpacking packaged ffmpeg")
@@ -407,7 +445,13 @@ if __name__ == "__main__":
     # Create separate folders for each camera
     os.chdir(args.log_dir)
     for cam in camera_params.keys():
-        os.mkdir(cam)
+        if args.distort_type == 0:
+            os.mkdir(cam + "_distorted")
+        elif args.distort_type == 1:
+            os.mkdir(cam)
+        else:
+            os.mkdir(cam + "_distorted")
+            os.mkdir(cam)
 
     # Load in the calibrations
     for cam, params in camera_params.items():
@@ -434,7 +478,7 @@ if __name__ == "__main__":
             manager = BaseManager()
             manager.start()
             buffer = manager.ConcurrentRingBuffer(maxlen=30)
-            centre_process = multiprocessing.Process(target=centre_image_logging_worker, args=(camera_params,))
+            centre_process = multiprocessing.Process(target=centre_image_logging_worker, args=(camera_params,buffer))
             side_process = multiprocessing.Process(target=side_image_logging_worker, args=(camera_params, buffer))
             processes = [centre_process, side_process]
 
