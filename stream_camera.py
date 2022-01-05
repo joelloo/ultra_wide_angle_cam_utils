@@ -200,7 +200,7 @@ def image_logging_writer(databuf):
             ret = databuf.get()
             if ret:
                 write_dir, ts, im = ret
-                if not write_dir == "centre":
+                if not write_dir[:6] == "centre":
                     im = im[:, ::-1, :]
                 cv2.imwrite(write_dir + '/' + str(ts) + '.jpg', im)
     except KeyboardInterrupt:
