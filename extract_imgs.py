@@ -34,7 +34,7 @@ if __name__ == "__main__":
         print("Processing ", dir)
         os.chdir(dir)
         print("Converting mp4 to jpg")
-        vid_file = dir + ".mp4"
+        vid_file = dir.split('_')[0] + ".mp4"
         convert_process = sp.Popen(shlex.split(f'{ffmpeg_path} -i {vid_file} -f image2 -frame_pts true %06d.jpg'))
         ret = convert_process.wait()
 
