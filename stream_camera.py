@@ -180,8 +180,8 @@ def side_image_logging_worker(camera_params, databuf):
                     databuf.put(("right", ts, right_dst))
 
             if vis:
-                cv2.imshow("Left", left_dst)
-                cv2.imshow("Right", right_dst)
+                cv2.imshow("Left", left_dst[:, ::-1, :])
+                cv2.imshow("Right", right_dst[:, ::-1, :])
                 cv2.waitKey(1)
 
             curr = time.time()
